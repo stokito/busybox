@@ -314,6 +314,9 @@ static const char DEFAULT_PATH_HTTPD_CONF[] ALIGN1 = "/etc";
 static const char HTTPD_CONF[] ALIGN1 = "httpd.conf";
 static const char HTTP_200[] ALIGN1 = "HTTP/1.1 200 OK\r\n";
 static const char index_html[] ALIGN1 = "index.html";
+#if ENABLE_FEATURE_HTTPD_DATE || ENABLE_FEATURE_HTTPD_LAST_MODIFIED
+	static const char RFC1123FMT[] ALIGN1 = "%a, %d %b %Y %H:%M:%S GMT";
+#endif
 
 typedef struct has_next_ptr {
 	struct has_next_ptr *next;
@@ -385,7 +388,7 @@ static const uint16_t http_response_type[] ALIGN2 = {
 	HTTP_PARTIAL_CONTENT,
 #endif
 	HTTP_MOVED_TEMPORARILY,
-#if ENABLE_FEATURE_HTTPD_ETAG
+#if ENABLE_FEATURE_HTTPD_ETAG || ENABLE_FEATURE_HTTPD_LAST_MODIFIED
 	HTTP_NOT_MODIFIED,
 #endif
 	HTTP_REQUEST_TIMEOUT,
@@ -418,7 +421,7 @@ static const struct {
 	{ "Partial Content", NULL },
 #endif
 	{ "Found", NULL },
-#if ENABLE_FEATURE_HTTPD_ETAG
+#if ENABLE_FEATURE_HTTPD_ETAG || ENABLE_FEATURE_HTTPD_LAST_MODIFIED
 	{ "Not Modified" },
 #endif
 	{ "Request Timeout", "No request appeared within 60 seconds" },
@@ -452,6 +455,9 @@ struct globals {
 	time_t last_mod;
 #if ENABLE_FEATURE_HTTPD_ETAG
 	char *if_none_match;
+#endif
+#if ENABLE_FEATURE_HTTPD_LAST_MODIFIED
+	char *if_modified_since;
 #endif
 	char *rmt_ip_str;       /* for $REMOTE_ADDR and $REMOTE_PORT */
 	const char *bind_addr_or_port;
@@ -491,6 +497,11 @@ struct globals {
 	int hdr_cnt;
 #if ENABLE_FEATURE_HTTPD_ETAG
 	char etag[sizeof("'%llx-%llx'") + 2 * sizeof(long long)*3];
+#endif
+#if ENABLE_FEATURE_HTTPD_LAST_MODIFIED
+	/* Last-Modified header.
+	 * Fixed size 29-byte string. Example: Sun, 06 Nov 1994 08:49:37 GMT */
+	char last_mod_date[40]; /* using a bit larger buffer to paranoia reasons */
 #endif
 #if ENABLE_FEATURE_HTTPD_ERROR_PAGES
 	const char *http_error_page[ARRAY_SIZE(http_response_type)];
@@ -1070,11 +1081,14 @@ static void log_and_exit(void)
  */
 static void send_headers(unsigned responseNum)
 {
-#if ENABLE_FEATURE_HTTPD_DATE || ENABLE_FEATURE_HTTPD_LAST_MODIFIED
-	static const char RFC1123FMT[] ALIGN1 = "%a, %d %b %Y %H:%M:%S GMT";
+#if ENABLE_FEATURE_HTTPD_DATE
 	/* Fixed size 29-byte string. Example: Sun, 06 Nov 1994 08:49:37 GMT */
 	char date_str[40]; /* using a bit larger buffer to paranoia reasons */
 	struct tm tm;
+#endif
+#if ENABLE_FEATURE_HTTPD_LAST_MODIFIED
+	/* If Last-Modified header was generated. It may be empty if ETag macthed with If-None-Match */
+	bool has_last_mod;
 #endif
 	const char *responseString = "";
 	const char *infoString = NULL;
@@ -1172,9 +1186,6 @@ static void send_headers(unsigned responseNum)
 #endif
 
 	if (file_size != -1) {    /* file */
-#if ENABLE_FEATURE_HTTPD_LAST_MODIFIED
-		strftime(date_str, sizeof(date_str), RFC1123FMT, gmtime_r(&last_mod, &tm));
-#endif
 #if ENABLE_FEATURE_HTTPD_RANGES
 		if (responseNum == HTTP_PARTIAL_CONTENT) {
 			len += sprintf(iobuf + len,
@@ -1215,12 +1226,16 @@ static void send_headers(unsigned responseNum)
 // (NB: standards do not define "Transfer-Length:" _header_,
 // transfer-length above is just a concept).
 
+#if ENABLE_FEATURE_HTTPD_LAST_MODIFIED
+		/* If Last-Modified was generated then first char will be not NUL */
+		has_last_mod = G.last_mod_date[0];
+#endif
 		len += sprintf(iobuf + len,
 #if ENABLE_FEATURE_HTTPD_RANGES
 			"Accept-Ranges: bytes\r\n"
 #endif
 #if ENABLE_FEATURE_HTTPD_LAST_MODIFIED
-			"Last-Modified: %s\r\n"
+			"%s%s%s"
 #endif
 #if ENABLE_FEATURE_HTTPD_ETAG
 			"ETag: %s\r\n"
@@ -1234,7 +1249,10 @@ static void send_headers(unsigned responseNum)
 	 */
 			"Content-Length: %"OFF_FMT"u\r\n",
 #if ENABLE_FEATURE_HTTPD_LAST_MODIFIED
-				date_str,
+				/* Add Last-Modified header only if it was generated */
+				has_last_mod ? "Last-Modified: " : "",
+				has_last_mod ? G.last_mod_date : "",
+				has_last_mod ? "\r\n" : "",
 #endif
 #if ENABLE_FEATURE_HTTPD_ETAG
 				G.etag,
@@ -1734,6 +1752,9 @@ static NOINLINE void send_file_and_exit(const char *url, int what)
 	char *suffix;
 	int fd;
 	ssize_t count;
+#if ENABLE_FEATURE_HTTPD_LAST_MODIFIED
+	struct tm tm;
+#endif
 
 	if (content_gzip) {
 		/* does <url>.gz exist? Then use it instead */
@@ -1772,10 +1793,36 @@ static NOINLINE void send_file_and_exit(const char *url, int what)
 			bb_perror_msg("If-None-Match and file's ETag are: '%s' '%s'\n", G.if_none_match, G.etag);
 		/* Weak ETag comparision.
 		 * If-None-Match may have many ETags but they are quoted so we can use simple substring search */
-		if (strstr(G.if_none_match, G.etag))
+		if (strstr(G.if_none_match, G.etag)) {
+			#if ENABLE_FEATURE_HTTPD_LAST_MODIFIED
+			/* Mark last_mod_date as empty */
+			G.last_mod_date[0] = '\0';
+			#endif
 			send_headers_and_exit(HTTP_NOT_MODIFIED);
+		}
 	}
 #endif
+#if ENABLE_FEATURE_HTTPD_LAST_MODIFIED
+	strftime(G.last_mod_date, sizeof(G.last_mod_date), RFC1123FMT, gmtime_r(&last_mod, &tm));
+	#if ENABLE_FEATURE_HTTPD_ETAG
+	/* if ETag present but wasn't matched then no sense to match by If-Modified-Since */
+	if (!G.if_none_match) {
+	#endif
+		if (G.if_modified_since) {
+			if (DEBUG)
+				bb_perror_msg("If-Modified-Since and file's Last-Modified are: '%s' '%s'\n", G.if_modified_since, G.last_mod_date);
+			/* in most cases the If-Modified-Since will be just equal to Last-Modified */
+			if (strcmp(G.if_modified_since, G.last_mod_date) == 0) {
+				/* Mark last_mod_date as empty */
+				G.last_mod_date[0] = '\0';
+				send_headers_and_exit(HTTP_NOT_MODIFIED);
+			}
+		}
+	#if ENABLE_FEATURE_HTTPD_ETAG
+	}
+	#endif
+#endif
+
 	/* If you want to know about EPIPE below
 	 * (happens if you abort downloads from local httpd): */
 	signal(SIGPIPE, SIG_IGN);
@@ -2527,6 +2574,13 @@ static void handle_incoming_and_exit(const len_and_sockaddr *fromAddr)
 		if (STRNCASECMP(iobuf, "If-None-Match:") == 0) {
 			free(G.if_none_match);
 			G.if_none_match = xstrdup(skip_whitespace(iobuf + sizeof("If-None-Match:") - 1));
+			continue;
+		}
+#endif
+#if ENABLE_FEATURE_HTTPD_LAST_MODIFIED
+		if (STRNCASECMP(iobuf, "If-Modified-Since:") == 0) {
+			free(G.if_modified_since);
+			G.if_modified_since = xstrdup(skip_whitespace(iobuf + sizeof("If-Modified-Since:") - 1));
 			continue;
 		}
 #endif

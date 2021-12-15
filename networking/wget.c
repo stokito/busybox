@@ -243,6 +243,7 @@ static const char wget_user_headers[] ALIGN1 =
 /* Globals */
 struct globals {
 	off_t content_len;        /* Content-length of the file */
+    const char *content_type; /* Content-length of the file */
 	off_t beg_range;          /* Range at which continue begins */
 #if ENABLE_FEATURE_WGET_STATUSBAR
 	off_t transferred;        /* Number of bytes transferred so far */
@@ -1224,8 +1225,10 @@ static void download_one_url(const char *url)
 				target.protocol, target.host,
 				target.path);
 		} else {
+            const char *method = (option_mask32 & WGET_OPT_POST_DATA) ? "POST" :
+                                 ((option_mask32 & WGET_OPT_SPIDER) ? "HEAD" : "GET");
 			SENDFMT(sfp, "%s /%s HTTP/1.1\r\n",
-				(option_mask32 & WGET_OPT_POST) ? "POST" : "GET",
+                method,
 				target.path);
 		}
 		if (!USR_HEADER_HOST)
@@ -1299,7 +1302,7 @@ static void download_one_url(const char *url)
 		}
 #endif
 
-		/*
+		/*quotearg_style (escape_quoting_style, type)
 		 * Retrieve HTTP response line and check for "200" status code.
 		 */
  read_response:
@@ -1388,9 +1391,9 @@ However, in real world it was observed that some web servers
 		 */
 		while ((str = get_sanitized_hdr(sfp)) != NULL) {
 			static const char keywords[] ALIGN1 =
-				"content-length\0""transfer-encoding\0""location\0";
+				"content-length\0""content-type\0""transfer-encoding\0""location\0";
 			enum {
-				KEY_content_length = 1, KEY_transfer_encoding, KEY_location
+				KEY_content_length = 1, KEY_content_type, KEY_transfer_encoding, KEY_location
 			};
 			smalluint key;
 
@@ -1409,6 +1412,11 @@ However, in real world it was observed that some web servers
 					bb_error_msg_and_die("content-length %s is garbage", str);
 				}
 				G.got_clen = 1;
+				continue;
+			}
+			if (key == KEY_content_type) {
+//				G.content_type = xstrdup(str);
+				G.content_type = str;
 				continue;
 			}
 			if (key == KEY_transfer_encoding) {
@@ -1467,8 +1475,11 @@ However, in real world it was observed that some web servers
 			G.output_fd = -1;
 		}
 	} else {
-		if (!(option_mask32 & WGET_OPT_QUIET))
-			fprintf(stderr, "remote file exists\n");
+		if (!(option_mask32 & WGET_OPT_QUIET)) {
+            fprintf(stderr, "Remote file exists\n");
+//            G.got_clen
+            fprintf(stderr, "Length: %d [%s]\n", G.content_len, G.content_type);
+        }
 	}
 
 #if ENABLE_FEATURE_WGET_FTP

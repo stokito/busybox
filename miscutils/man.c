@@ -303,7 +303,7 @@ int man_main(int argc UNUSED_PARAM, char **argv)
 	config_close(parser);
 
 	if (!man_path_list) {
-		static const char *const mpl[] = { "/usr/man", "/usr/share/man", NULL };
+		static const char *const mpl[] ALIGN_PTR = { "/usr/man", "/usr/share/man", NULL };
 		man_path_list = (char**)mpl;
 		/*count_mp = 2; - not used below anyway */
 	}
@@ -324,7 +324,7 @@ int man_main(int argc UNUSED_PARAM, char **argv)
 
 	/* is 1st ARG a SECTION? */
 	sec_list = conf_sec_list;
-	if (is_section_name(conf_sec_list, *argv)) {
+	if (is_section_name(conf_sec_list, *argv) && argv[1]) {
 		/* yes */
 		sec_list = *argv++;
 	}

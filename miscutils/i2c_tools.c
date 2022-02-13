@@ -120,6 +120,7 @@ static int32_t i2c_smbus_access(int fd, char read_write, uint8_t cmd,
 	return ioctl(fd, I2C_SMBUS, &args);
 }
 
+#if ENABLE_I2CGET || ENABLE_I2CSET || ENABLE_I2CDUMP || ENABLE_I2CDETECT
 static int32_t i2c_smbus_read_byte(int fd)
 {
 	union i2c_smbus_data data;
@@ -131,6 +132,7 @@ static int32_t i2c_smbus_read_byte(int fd)
 
 	return data.byte;
 }
+#endif
 
 #if ENABLE_I2CGET || ENABLE_I2CSET || ENABLE_I2CDUMP
 static int32_t i2c_smbus_write_byte(int fd, uint8_t val)
@@ -1212,7 +1214,7 @@ static void NORETURN list_i2c_busses_and_exit(void)
 		}
 	}
 
-	exit(EXIT_SUCCESS);
+	exit_SUCCESS();
 }
 
 static void NORETURN no_support(const char *cmd)
@@ -1394,7 +1396,7 @@ static void check_i2c_func(int fd)
 }
 
 //usage:#define i2ctransfer_trivial_usage
-//usage:       "[-fay] I2CBUS {rLENGTH[@ADDR] | wLENGTH[@ADDR] DATA...}..."
+//usage:       "[-fay] I2CBUS { rLENGTH[@ADDR] | wLENGTH[@ADDR] DATA...}..."
 //usage:#define i2ctransfer_full_usage "\n\n"
 //usage:       "Read/write I2C data in one transfer"
 //usage:     "\n"

@@ -89,6 +89,12 @@ getopt32(char **argv, const char *applet_opts, ...)
         root:x:0:0:root:/root:/bin/bash
         user:x:500:500::/home/user:/bin/bash
 
+ "^"    options string is "^optchars""\0""opt_complementary".
+
+ "!"    If the first character in the applet_opts string is a '!',
+        report bad options, missing required options,
+        inconsistent options with all-ones return value (instead of abort.
+
  "+"    If the first character in the applet_opts string is a plus,
         then option processing will stop as soon as a non-option is
         encountered in the argv array.  Useful for applets like env
@@ -96,10 +102,7 @@ getopt32(char **argv, const char *applet_opts, ...)
         env -i ls -d /
         Here we want env to process just the '-i', not the '-d'.
 
- "!"    Report bad options, missing required options,
-        inconsistent options with all-ones return value (instead of abort).
-
- "^"    options string is "^optchars""\0""opt_complementary".
+        (The order of multiple prefixes must be "^!+...")
 
 uint32_t
 getopt32long(char **argv, const char *applet_opts, const char *logopts...)
@@ -293,7 +296,7 @@ Special characters:
 
 /* Code here assumes that 'unsigned' is at least 32 bits wide */
 
-const char *const bb_argv_dash[] = { "-", NULL };
+const char *const bb_argv_dash[] ALIGN_PTR = { "-", NULL };
 
 enum {
 	PARAM_STRING,

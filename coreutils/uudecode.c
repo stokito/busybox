@@ -155,7 +155,16 @@ int uudecode_main(int argc UNUSED_PARAM, char **argv)
 				break;
 		}
 		dst_stream = stdout;
-		if (NOT_LONE_DASH(outname)) {
+		if (NOT_LONE_DASH(outname)
+/* https://pubs.opengroup.org/onlinepubs/9699919799/utilities/uudecode.html
+ * https://pubs.opengroup.org/onlinepubs/9699919799/utilities/uuencode.html
+ * The above says that output file name specified in input file
+ * or overridden by -o OUTFILE can be special "/dev/stdout" string.
+ * This usually works "implicitly": many systems have /dev/stdout.
+ * If ENABLE_DESKTOP, support that explicitly:
+ */
+		 && (!ENABLE_DESKTOP || strcmp(outname, "/dev/stdout") != 0)
+		) {
 			dst_stream = xfopen_for_write(outname);
 			fchmod(fileno(dst_stream), mode & (S_IRWXU | S_IRWXG | S_IRWXO));
 		}
@@ -183,7 +192,7 @@ int uudecode_main(int argc UNUSED_PARAM, char **argv)
 //usage:#define base32_trivial_usage
 //usage:	"[-d] [-w COL] [FILE]"
 //usage:#define base32_full_usage "\n\n"
-//usage:       "Base32 encode or decode FILE to standard output"
+//usage:       "Base32 encode or decode FILE to standard output\n"
 //usage:     "\n	-d	Decode data"
 //usage:     "\n	-w COL	Wrap lines at COL (default 76, 0 disables)"
 ////usage:     "\n	-i	When decoding, ignore non-alphabet characters"
@@ -191,10 +200,12 @@ int uudecode_main(int argc UNUSED_PARAM, char **argv)
 //usage:#define base64_trivial_usage
 //usage:	"[-d] [-w COL] [FILE]"
 //usage:#define base64_full_usage "\n\n"
-//usage:       "Base64 encode or decode FILE to standard output"
+//usage:       "Base64 encode or decode FILE to standard output\n"
 //usage:     "\n	-d	Decode data"
 //usage:     "\n	-w COL	Wrap lines at COL (default 76, 0 disables)"
-////usage:     "\n	-i	When decoding, ignore non-alphabet characters"
+///////:     "\n	-i	When decoding, ignore non-alphabet characters"
+// -i is accepted but has no effect: currently, decode_base32/64() functions
+// (called via read_base64()) skip invalid chars unconditionally.
 
 //                 APPLET_ODDNAME:name    main     location    suid_type     help
 //applet:IF_BASE32(APPLET_ODDNAME(base32, baseNUM, BB_DIR_BIN, BB_SUID_DROP, base32))
@@ -272,7 +283,7 @@ int baseNUM_main(int argc UNUSED_PARAM, char **argv)
 	unsigned opts;
 	unsigned col = 76;
 
-	opts = getopt32(argv, "^" "dw:+" "\0" "?1"/* 1 arg max*/, &col);
+	opts = getopt32(argv, "^" "diw:+" "\0" "?1"/* 1 arg max*/, &col);
 	argv += optind;
 
 	if (!argv[0])
@@ -319,7 +330,7 @@ int baseNUM_main(int argc UNUSED_PARAM, char **argv)
 			}
 
 			if (col == 0) {
-				fputs(dst_buf, stdout);
+				fputs_stdout(dst_buf);
 			} else {
 				char *result = dst_buf;
 				if (rem == 0)
@@ -341,7 +352,7 @@ int baseNUM_main(int argc UNUSED_PARAM, char **argv)
 #undef src_buf
 	}
 
-	fflush_stdout_and_exit(EXIT_SUCCESS);
+	fflush_stdout_and_exit_SUCCESS();
 }
 #endif
 

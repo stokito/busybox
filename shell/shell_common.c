@@ -59,7 +59,7 @@ shell_builtin_read(struct builtin_read_params *params)
 	while (*pp) {
 		if (endofname(*pp)[0] != '\0') {
 			/* Mimic bash message */
-			bb_error_msg("read: '%s': not a valid identifier", *pp);
+			bb_error_msg("read: '%s': bad variable name", *pp);
 			return (const char *)(uintptr_t)1;
 		}
 		pp++;
@@ -196,6 +196,7 @@ shell_builtin_read(struct builtin_read_params *params)
 		 */
 		errno = 0;
 		pfd[0].events = POLLIN;
+//TODO race with a signal arriving just before the poll!
 		if (poll(pfd, 1, timeout) <= 0) {
 			/* timed out, or EINTR */
 			err = errno;
@@ -230,7 +231,7 @@ shell_builtin_read(struct builtin_read_params *params)
 		 * without variable names (bash compat).
 		 * Thus, "read" and "read REPLY" are not the same.
 		 */
-		if (!params->opt_d && argv[0]) {
+		if (argv[0]) {
 /* http://www.opengroup.org/onlinepubs/9699919799/utilities/V3_chap02.html#tag_18_06_05 */
 			const char *is_ifs = strchr(ifs, c);
 			if (startword && is_ifs) {

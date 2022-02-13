@@ -303,6 +303,12 @@ int FAST_FUNC get_terminal_width(int fd)
 	return width;
 }
 
+int FAST_FUNC is_TERM_dumb(void)
+{
+	char *term = getenv("TERM");
+	return term && strcmp(term, "dumb") == 0;
+}
+
 int FAST_FUNC tcsetattr_stdin_TCSANOW(const struct termios *tp)
 {
 	return tcsetattr(STDIN_FILENO, TCSANOW, tp);
@@ -416,4 +422,14 @@ int FAST_FUNC wait4pid(pid_t pid)
 	if (WIFSIGNALED(status))
 		return WTERMSIG(status) + 0x180;
 	return 0;
+}
+
+void FAST_FUNC exit_SUCCESS(void)
+{
+	exit(EXIT_SUCCESS);
+}
+
+void FAST_FUNC _exit_SUCCESS(void)
+{
+	_exit(EXIT_SUCCESS);
 }

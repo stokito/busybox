@@ -136,7 +136,9 @@
 //usage:#define wget_trivial_usage
 //usage:	IF_FEATURE_WGET_LONG_OPTIONS(
 //usage:       "[-cqS] [--spider] [-O FILE] [-o LOGFILE] [--header STR]\n"
-//usage:       "	[--post-data STR | --post-file FILE] [-Y on/off]\n"
+//usage:       "	[--post-data=STR | --post-file=FILE]\n"
+//usage:       "	[--method=METHOD] [--body-data=STR | --body-file=FILE]\n"
+//usage:       "	[-Y on/off]\n"
 /* Since we ignore these opts, we don't show them in --help */
 /* //usage:    "	[--no-cache] [--passive-ftp] [-t TRIES]" */
 /* //usage:    "	[-nv] [-nc] [-nH] [-np]" */
@@ -303,6 +305,9 @@ enum {
 	WGET_OPT_SPIDER     = (1 << 13) * ENABLE_FEATURE_WGET_LONG_OPTIONS,
 	WGET_OPT_NO_CHECK_CERT = (1 << 14) * ENABLE_FEATURE_WGET_LONG_OPTIONS,
 	WGET_OPT_POST_FILE  = (1 << 15) * ENABLE_FEATURE_WGET_LONG_OPTIONS,
+	WGET_OPT_METHOD     = (1 << 16) * ENABLE_FEATURE_WGET_LONG_OPTIONS,
+	WGET_OPT_BODY_DATA  = (1 << 17) * ENABLE_FEATURE_WGET_LONG_OPTIONS,
+	WGET_OPT_BODY_FILE  = (1 << 18) * ENABLE_FEATURE_WGET_LONG_OPTIONS,
 	/* hijack this bit for other than opts purposes: */
 	WGET_NO_FTRUNCATE   = (1 << 31)
 };
@@ -1260,7 +1265,7 @@ static void download_one_url(const char *url)
 			fputs(G.extra_headers, sfp);
 		}
 
-		if (option_mask32 & WGET_OPT_POST_FILE) {
+		if (option_mask32 & WGET_OPT_POST_FILE || option_mask32 & WGET_OPT_BODY_FILE) {
 			int fd = xopen_stdin(G.post_file);
 			G.post_data = xmalloc_read(fd, NULL);
 			close(fd);
@@ -1515,6 +1520,9 @@ IF_DESKTOP(	"tries\0"            Required_argument "t")
 		"spider\0"           No_argument       "\xfd"
 		"no-check-certificate\0" No_argument   "\xfc"
 		"post-file\0"        Required_argument "\xfb"
+		"method\0"           Required_argument "\xf1"
+		"body-data\0"        Required_argument "\xf2"
+		"body-file\0"        Required_argument "\xf3"
 		/* Ignored (we always use PASV): */
 IF_DESKTOP(	"passive-ftp\0"      No_argument       "\xf0")
 		/* Ignored (we don't support caching) */
@@ -1571,6 +1579,9 @@ IF_DESKTOP(	"no-parent\0"        No_argument       "\xf0")
 		IF_FEATURE_WGET_LONG_OPTIONS(, &headers_llist)
 		IF_FEATURE_WGET_LONG_OPTIONS(, &G.post_data)
 		IF_FEATURE_WGET_LONG_OPTIONS(, &G.post_file)
+		IF_FEATURE_WGET_LONG_OPTIONS(, &G.method)
+		IF_FEATURE_WGET_LONG_OPTIONS(, &G.post_data) // body-data will be stored to post_data
+		IF_FEATURE_WGET_LONG_OPTIONS(, &G.post_file) // body-file will be stored to post_file
 	);
 #if 0 /* option bits debug */
 	if (option_mask32 & WGET_OPT_RETRIES) bb_error_msg("-t NUM");
@@ -1580,11 +1591,16 @@ IF_DESKTOP(	"no-parent\0"        No_argument       "\xf0")
 	if (option_mask32 & WGET_OPT_SPIDER) bb_error_msg("--spider");
 	if (option_mask32 & WGET_OPT_NO_CHECK_CERT) bb_error_msg("--no-check-certificate");
 	if (option_mask32 & WGET_OPT_POST_FILE) bb_error_msg("--post-file");
+	if (option_mask32 & WGET_OPT_METHOD) bb_error_msg("--method");
+	if (option_mask32 & WGET_OPT_BODY_DATA) bb_error_msg("--body-data");
+	if (option_mask32 & WGET_OPT_BODY_FILE) bb_error_msg("--body-file");
 	exit(0);
 #endif
 	argv += optind;
 
-	if (option_mask32 & WGET_OPT_POST) {
+	if (option_mask32 & WGET_OPT_METHOD) {
+		// the G.method already was populated from getopt()
+	} else if (option_mask32 & WGET_OPT_POST) {
 		G.method = "POST";
 	} else if (option_mask32 & WGET_OPT_SPIDER) {
 		/* Note: GNU wget --spider sends a HEAD and if it failed repeats with a GET */

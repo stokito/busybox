@@ -242,6 +242,7 @@ static const char wget_user_headers[] ALIGN1 =
 
 /* Globals */
 struct globals {
+	const char *method;
 	off_t content_len;        /* Content-length of the file */
 	off_t beg_range;          /* Range at which continue begins */
 #if ENABLE_FEATURE_WGET_STATUSBAR
@@ -1220,12 +1221,13 @@ static void download_one_url(const char *url)
 #endif
 		/* Send HTTP request */
 		if (use_proxy) {
-			SENDFMT(sfp, "GET %s://%s/%s HTTP/1.1\r\n",
+			SENDFMT(sfp, "%s %s://%s/%s HTTP/1.1\r\n",
+				G.method,
 				target.protocol, target.host,
 				target.path);
 		} else {
 			SENDFMT(sfp, "%s /%s HTTP/1.1\r\n",
-				(option_mask32 & WGET_OPT_POST) ? "POST" : "GET",
+				G.method,
 				target.path);
 		}
 		if (!USR_HEADER_HOST)
@@ -1581,6 +1583,15 @@ IF_DESKTOP(	"no-parent\0"        No_argument       "\xf0")
 	exit(0);
 #endif
 	argv += optind;
+
+	if (option_mask32 & WGET_OPT_POST) {
+		G.method = "POST";
+	} else if (option_mask32 & WGET_OPT_SPIDER) {
+		/* Note: GNU wget --spider sends a HEAD and if it failed repeats with a GET */
+		G.method = "HEAD";
+	} else {
+		G.method = "GET";
+	}
 
 #if ENABLE_FEATURE_WGET_LONG_OPTIONS
 	if (headers_llist) {

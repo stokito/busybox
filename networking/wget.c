@@ -1240,7 +1240,7 @@ static void download_one_url(const char *url)
 
 #if ENABLE_FEATURE_WGET_AUTHENTICATION
 		if (target.user && !USR_HEADER_AUTH) {
-			SENDFMT(sfp, "Proxy-Authorization: Basic %s\r\n"+6,
+			SENDFMT(sfp, "Authorization: Basic %s\r\n",
 				base64enc(target.user));
 		}
 		if (use_proxy && server.user && !USR_HEADER_PROXY_AUTH) {

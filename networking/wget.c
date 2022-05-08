@@ -152,6 +152,10 @@
 //usage:     "\n	--header STR	Add STR (of form 'header: value') to headers"
 //usage:     "\n	--post-data STR	Send STR using POST method"
 //usage:     "\n	--post-file FILE	Send FILE using POST method"
+//usage:	IF_FEATURE_WGET_AUTHENTICATION(
+//usage:     "\n	--user=USER	User (Basic Auth / FTP)"
+//usage:     "\n	--password=PASS	Password"
+//usage:	)
 //usage:	IF_FEATURE_WGET_OPENSSL(
 //usage:     "\n	--no-check-certificate	Don't validate the server's certificate"
 //usage:	)
@@ -255,6 +259,10 @@ struct globals {
 	char *post_file;
 	char *extra_headers;
 	unsigned char user_headers; /* Headers mentioned by the user */
+#if ENABLE_FEATURE_WGET_AUTHENTICATION
+	char *user;
+	char *password;
+#endif
 #endif
 	char *fname_out;        /* where to direct output (-O) */
 	char *fname_log;        /* where to direct log (-o) */
@@ -302,6 +310,8 @@ enum {
 	WGET_OPT_SPIDER     = (1 << 13) * ENABLE_FEATURE_WGET_LONG_OPTIONS,
 	WGET_OPT_NO_CHECK_CERT = (1 << 14) * ENABLE_FEATURE_WGET_LONG_OPTIONS,
 	WGET_OPT_POST_FILE  = (1 << 15) * ENABLE_FEATURE_WGET_LONG_OPTIONS,
+	WGET_OPT_USER       = (1 << 16) * ENABLE_FEATURE_WGET_LONG_OPTIONS,
+	WGET_OPT_PASSWORD   = (1 << 17) * ENABLE_FEATURE_WGET_LONG_OPTIONS,
 	/* hijack this bit for other than opts purposes: */
 	WGET_NO_FTRUNCATE   = (1 << 31)
 };
@@ -617,6 +627,11 @@ static void parse_url(const char *src_url, struct host_info *h)
 		h->user = xstrdup(percent_decode_in_place(h->host, /*strict:*/ 0));
 		h->host = sp + 1;
 	}
+#if ENABLE_FEATURE_WGET_LONG_OPTIONS && ENABLE_FEATURE_WGET_AUTHENTICATION
+	if (h->user == NULL && G.user != NULL && G.password != NULL) {
+		h->user = xasprintf("%s:%s", G.user, G.password);
+	}
+#endif
 	/* else: h->user remains NULL, or as set by original request
 	 * before redirect (if we are here after a redirect).
 	 */
@@ -1521,6 +1536,9 @@ IF_DESKTOP(	"no-verbose\0"       No_argument       "\xf0")
 IF_DESKTOP(	"no-clobber\0"       No_argument       "\xf0")
 IF_DESKTOP(	"no-host-directories\0" No_argument    "\xf0")
 IF_DESKTOP(	"no-parent\0"        No_argument       "\xf0")
+IF_FEATURE_WGET_AUTHENTICATION(
+		"user\0"             Required_argument     "\xf1"
+		"password\0"         Required_argument     "\xf2")
 		;
 # define GETOPT32 getopt32long
 # define LONGOPTS ,wget_longopts
@@ -1569,6 +1587,8 @@ IF_DESKTOP(	"no-parent\0"        No_argument       "\xf0")
 		IF_FEATURE_WGET_LONG_OPTIONS(, &headers_llist)
 		IF_FEATURE_WGET_LONG_OPTIONS(, &G.post_data)
 		IF_FEATURE_WGET_LONG_OPTIONS(, &G.post_file)
+		IF_FEATURE_WGET_LONG_OPTIONS(IF_FEATURE_WGET_AUTHENTICATION(, &G.user))
+		IF_FEATURE_WGET_LONG_OPTIONS(IF_FEATURE_WGET_AUTHENTICATION(, &G.password))
 	);
 #if 0 /* option bits debug */
 	if (option_mask32 & WGET_OPT_RETRIES) bb_error_msg("-t NUM");

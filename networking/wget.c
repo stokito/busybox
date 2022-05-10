@@ -1226,15 +1226,33 @@ static void download_one_url(const char *url)
 #endif
 		/* Send HTTP request */
 		if (use_proxy) {
-			SENDFMT(sfp, "%s %s://%s/%s HTTP/1.1\r\n",
-				G.method,
-				target.protocol, target.host,
-				target.path);
-		} else {
-			SENDFMT(sfp, "%s /%s HTTP/1.1\r\n",
-				G.method,
-				target.path);
+			SENDFMT(sfp, "CONNECT %s HTTP/1.1\r\n",
+				target.host);
+			if (server.user && !USR_HEADER_PROXY_AUTH) {
+				SENDFMT(sfp, "Proxy-Authorization: Basic %s\r\n",
+						base64enc(server.user));
+			}
+			SENDFMT(sfp, "\r\n");
+
+			fgets_trim_sanitize(sfp, "  %s\n");
+
+			str = G.wget_buf;
+			str = skip_non_whitespace(str);
+			str = skip_whitespace(str);
+			// FIXME: no error check
+			// xatou wouldn't work: "200 OK"
+			status = atoi(str);
+			switch (status) {
+				case 200:
+					break;
+				default:
+					bb_error_msg_and_die("proxy returned error: %s", G.wget_buf);
+			}
+			fprintf(stderr, "Proxy responded\n");
 		}
+		SENDFMT(sfp, "%s /%s HTTP/1.1\r\n",
+			G.method,
+			target.path);
 		if (!USR_HEADER_HOST)
 			SENDFMT(sfp, "Host: %s\r\n", target.host);
 		if (!USR_HEADER_USER_AGENT)
@@ -1249,10 +1267,6 @@ static void download_one_url(const char *url)
 		if (target.user && !USR_HEADER_AUTH) {
 			SENDFMT(sfp, "Proxy-Authorization: Basic %s\r\n"+6,
 				base64enc(target.user));
-		}
-		if (use_proxy && server.user && !USR_HEADER_PROXY_AUTH) {
-			SENDFMT(sfp, "Proxy-Authorization: Basic %s\r\n",
-				base64enc(server.user));
 		}
 #endif
 
